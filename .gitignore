@@ -112,6 +112,7 @@ logs/
 # vim swap files
 *.swp
 *.pyc
+*.swo
 
 # data files
 data/*
