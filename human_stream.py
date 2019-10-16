@@ -32,12 +32,6 @@ maskrcnn_cfg.merge_from_file(config_file)
 coco_demo = COCODemo(maskrcnn_cfg, min_image_size=400, confidence_threshold=0.7)
 
 test_img = cv2.imread("examples/det_example.jpeg")
-all_pred = coco_demo.compute_prediction(test_img)
-top_pred = coco_demo.select_top_predictions(all_pred)
-print(top_pred)
-
-
-human_pred = select_humans(top_pred)
 
 
 # Human Detection
@@ -58,32 +52,11 @@ model.eval()
 renderer = Renderer(focal_length=constants.FOCAL_LENGTH, img_res=constants.IMG_RES, faces=smpl.faces)
 
 
-# Preprocess input image and generate predictions
-
-# for now only take first image
-img_stack, norm_img_stack = process_image(test_img, human_pred, constants.IMG_NORM_MEAN, constants.IMG_NORM_STD)
-norm_img = norm_img_stack[0]
-img = img_stack[0]
-
-with torch.no_grad():
-    pred_rotmat, pred_betas, pred_camera = model(norm_img.to(device))
-    pred_output = smpl(betas=pred_betas, body_pose=pred_rotmat[:,1:], global_orient=pred_rotmat[:,0].unsqueeze(1), pose2rot=False)
-    pred_vertices = pred_output.vertices
-
-# Calculate camera parameters for rendering
-camera_translation = torch.stack([pred_camera[:,1], pred_camera[:,2], 2*constants.FOCAL_LENGTH/(constants.IMG_RES * pred_camera[:,0] +1e-9)],dim=-1)
-camera_translation = camera_translation[0].cpu().numpy()
-pred_vertices = pred_vertices[0].cpu().numpy()
-img = img.permute(1,2,0).cpu().numpy()
-
-# Render parametric shape
-#img_shape = renderer(pred_vertices, camera_translation, img)
-img_shape = renderer.render_full_img(pred_vertices, camera_translation, test_img[:,:,::-1].copy(), human_pred[0])
 
 
-pdb.set_trace()
-plt.imshow(cropped_detections.numpy())
-exit()
+#pdb.set_trace()
+#plt.imshow(cropped_detections.numpy())
+#exit()
 
 # Dummy image and PyPlot figures for initialization
 predictions = np.zeros((640, 480, 3), dtype='uint8')
@@ -114,9 +87,36 @@ try:
         depth_image = np.asanyarray(depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
         
-        predictions = coco_demo.run_on_opencv_image(color_image)
-        imshow(ax, predictions)
+        all_pred = coco_demo.compute_prediction(color_image)
+        top_pred = coco_demo.select_top_predictions(all_pred)
+#        print(top_pred)
+        
+        
+        human_pred = select_humans(top_pred)
+        if len(human_pred) == 0:
+            imshow(ax, color_image)
+            continue
 
+        # Preprocess input image and generate predictions
+        # for now only take first image
+        img_stack, norm_img_stack = process_image(color_image, human_pred, constants.IMG_NORM_MEAN, constants.IMG_NORM_STD)
+        norm_img = norm_img_stack[0]
+        img = img_stack[0]
+
+        with torch.no_grad():
+            pred_rotmat, pred_betas, pred_camera = model(norm_img.to(device))
+            pred_output = smpl(betas=pred_betas, body_pose=pred_rotmat[:,1:], global_orient=pred_rotmat[:,0].unsqueeze(1), pose2rot=False)
+            pred_vertices = pred_output.vertices
+        
+        # Calculate camera parameters for rendering
+        camera_translation = torch.stack([pred_camera[:,1], pred_camera[:,2], 2*constants.FOCAL_LENGTH/(constants.IMG_RES * pred_camera[:,0] +1e-9)],dim=-1)
+        camera_translation = camera_translation[0].cpu().numpy()
+        pred_vertices = pred_vertices[0].cpu().numpy()
+        img = img.permute(1,2,0).cpu().numpy()
+        
+        # Render parametric shape
+        predictions = renderer.render_full_img(pred_vertices, camera_translation, color_image, human_pred[0])
+        imshow(ax, predictions)
 finally:
 
     # Stop streaming

@@ -121,7 +121,7 @@ class Renderer:
             # img res is saved: 224
             new_width = 224
             new_height = int(crop_height / crop_width * 224)
-            heigt_offset = int((224 - new_height) / 2)
+            height_offset = int((224 - new_height) / 2)
             res_color = cv2.resize(color[height_offset:(height_offset + new_height), :], dsize=(crop_width, crop_height), interpolation=cv2.INTER_CUBIC)
             res_depth = cv2.resize(rend_depth[height_offset:(height_offset + new_height), :], dsize=(crop_width, crop_height), interpolation=cv2.INTER_CUBIC)
         else:
