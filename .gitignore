@@ -106,6 +106,9 @@ venv.bak/
 # yaml files
 yamls/
 
+# video dir
+video/
+
 # logs
 logs/
 
