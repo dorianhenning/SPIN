@@ -39,21 +39,7 @@ class Renderer:
             alphaMode='OPAQUE',
             baseColorFactor=(0.8, 0.3, 0.3, 1.0))
 
-        camera_pose[0, 3] *= -1.
-        camera_pose[1, 3] *= 1.
-
-
-        #bb_x = bbox[2] - bbox[0]
-        #bb_y = bbox[3] - bbox[1]
-        #if bb_x > bb_y: 
-        #    bb_scale = bb_x.cpu().numpy()
-        #else: 
-        #    bb_scale = bb_y.cpu().numpy()
-
-        # correct distance to object by z = f * z' * x_pred_size / ( f' * bb_scale)
-        #camera_trans[2] = self.focal_length * camera_trans[2] * 224.0 / (5000.0 * bb_scale)
-        # correct camera shift: dx_c = dx_c' * bb_scale / x_pred_size
-        #camera_trans[0:2] = camera_trans[0:2] * bb_scale / 224.0
+        camera_pose[0, 3] *= -1.  # why?
 
         mesh = trimesh.Trimesh(vertices, self.faces)
         rot = trimesh.transformations.rotation_matrix(
@@ -64,12 +50,9 @@ class Renderer:
         scene = pyrender.Scene(ambient_light=(0.5, 0.5, 0.5))
         scene.add(mesh, 'mesh')
 
-        #camera_pose = np.eye(4)
-        #camera_pose[:3, 3] = camera_trans
         camera = pyrender.IntrinsicsCamera(fx=self.focal_length, fy=self.focal_length,
                                            cx=self.camera_center[0], cy=self.camera_center[1])
         scene.add(camera, pose=camera_pose)
-
 
         light = pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=1)
         light_pose = np.eye(4)
@@ -84,7 +67,6 @@ class Renderer:
         scene.add(light, pose=light_pose)
 
         color, rend_depth = self.renderer.render(scene, flags=pyrender.RenderFlags.RGBA)
-        #color = color.astype(np.float32) / 255.0
         valid_mask = (rend_depth > 0)[:,:,None]
         output_img = (color[:, :, :3] * valid_mask +
                   (1 - valid_mask) * image)
