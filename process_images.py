@@ -15,16 +15,16 @@ import trimesh
 
 # Detection imports
 from maskrcnn_benchmark.config import cfg as maskrcnn_cfg
-from detection.predictor import COCODemo
+from SPIN.detection.predictor import COCODemo
 
 # SPIN imports
-from models import hmr, SMPL
-from utils.true_renderer import Renderer
-from utils.renderer import Renderer as orthographic_renderer
-import config
-import constants
+from SPIN.models import hmr, SMPL
+from SPIN.utils.true_renderer import Renderer
+from SPIN.utils.renderer import Renderer as orthographic_renderer
+import SPIN.config
+import SPIN.constants
 
-from utils.stream import imshow, process_image, select_humans, test_transformation
+from SPIN.utils.stream import imshow, process_image, select_humans
 
 LIVE = False
 
@@ -35,7 +35,7 @@ parser.add_argument('--outfile', type=str, default=None, help='Filename of outpu
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    config_file = "../maskrcnn-benchmark/configs/caffe2/e2e_faster_rcnn_R_50_FPN_1x_caffe2.yaml"
+    config_file = "/vol/bitbucket/dfh17/git/maskrcnn-benchmark/configs/caffe2/e2e_faster_rcnn_R_50_FPN_1x_caffe2.yaml"
     maskrcnn_cfg.merge_from_file(config_file)
 
     coco_demo = COCODemo(maskrcnn_cfg, min_image_size=400, confidence_threshold=0.7)
@@ -44,19 +44,19 @@ if __name__ == "__main__":
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     # Load pretrained model
-    model = hmr(config.SMPL_MEAN_PARAMS).to(device)
+    model = hmr(SPIN.config.SMPL_MEAN_PARAMS).to(device)
     checkpoint = torch.load('data/model_checkpoint.pt')
     model.load_state_dict(checkpoint['model'], strict=False)
 
     # Load SMPL model
-    smpl = SMPL(config.SMPL_MODEL_DIR,
+    smpl = SMPL(SPIN.config.SMPL_MODEL_DIR,
                 batch_size=1,
                 create_transl=False).to(device)
     model.eval()
 
     # Setup renderer for visualization
     renderer = Renderer(faces=smpl.faces)
-    orth_renderer = orthographic_renderer(focal_length=constants.ORTH_FOCAL_LENGTH, img_res=constants.IMG_RES, faces=smpl.faces)
+    orth_renderer = orthographic_renderer(focal_length=SPIN.constants.ORTH_FOCAL_LENGTH, img_res=SPIN.constants.IMG_RES, faces=smpl.faces)
 
     # Dummy image and PyPlot figures for initialization
     if LIVE:
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
         # Preprocess input image and generate predictions
         # for now only take first image
-        img_stack, norm_img_stack = process_image(color_image, human_pred, constants.IMG_NORM_MEAN, constants.IMG_NORM_STD)
+        img_stack, norm_img_stack = process_image(color_image, human_pred, SPIN.constants.IMG_NORM_MEAN, SPIN.constants.IMG_NORM_STD)
         norm_img = norm_img_stack[0]
         img = img_stack[0]
         with torch.no_grad():
@@ -99,7 +99,7 @@ if __name__ == "__main__":
 #        pdb.set_trace()
         verts = pred_output.vertices.cpu().numpy()[0]
         points = verts[smpl.faces.flatten()]
-        np.save(args.dir + 'body_points/' + filename[:-3] + 'npy', points)
+        #np.save(args.dir + 'body_points/' + filename[:-3] + 'npy', points)
 
         # tranformation mesh vertices to camera for rendering
         # bounding box
@@ -118,15 +118,15 @@ if __name__ == "__main__":
         # camera translation == t_BC
         camera_translation = torch.stack([pred_camera[:,1],
                                           pred_camera[:,2],
-                                          2 * constants.FOCAL_LENGTH[0] / (pred_camera[:,0] * bb_scale)], dim=-1)
+                                          2 * SPIN.constants.FOCAL_LENGTH[0] / (pred_camera[:,0] * bb_scale)], dim=-1)
         camera_translation = camera_translation[0].cpu().numpy()
 
         # Compute theta between image focal point and BBox center
-        dx = bbox[0] + bb_x/2 - constants.CAMERA_CENTER[0]  # offset from camera center in x direction
-        dy = bbox[1] + bb_y/2 - constants.CAMERA_CENTER[1]  # offset from camera center in y direction
+        dx = bbox[0] + bb_x/2 - SPIN.constants.CAMERA_CENTER[0]  # offset from camera center in x direction
+        dy = bbox[1] + bb_y/2 - SPIN.constants.CAMERA_CENTER[1]  # offset from camera center in y direction
 
         n0 = np.array([0.0, 0.0, 1.0])
-        n1 = np.array([dx,-dy,constants.FOCAL_LENGTH[0]])  # y points in negative (or down) direction
+        n1 = np.array([dx,-dy,SPIN.constants.FOCAL_LENGTH[0]])  # y points in negative (or down) direction
         n1 = n1 / np.linalg.norm(n1)
         theta = np.arccos(np.dot(n0,n1))
 
@@ -139,17 +139,19 @@ if __name__ == "__main__":
 
         # build Transformation matrix with R & T
         # t_CB = R * t_BC
-        t_CB = np.matmul(R, camera_translation)
+        #t_CB = np.matmul(R, camera_translation)
+        t_CB = camera_translation / np.cos(theta)
         T_CB = np.eye(4)
         T_CB[:3, :3] = R
         T_CB[:3, 3] = t_CB
-        T_CB[:3,3] /= np.cos(theta)
+        #T_CB[:3,3] /= np.cos(theta)
 
-        np.save(args.dir + 'trafo/' + filename[:-3] + 'npy', T_CB)
+        #np.save(args.dir + 'trafo/' + filename[:-3] + 'npy', T_CB)
         
         # Render parametric shape
 #        orth_predictions = orth_renderer(pred_vertices.copy(), orth_camera_translation.copy(), img)
-#        predictions = renderer(pred_vertices.copy(), T_CB.copy(), color_image)
+        predictions = renderer(pred_vertices.copy(), T_CB.copy(), color_image)
+        pdb.set_trace()
 #        imshow(ax, predictions)
 #        new_file = args.dir + "_pred/" + filename
 #        plt.imsave(new_file, (predictions).astype(np.uint8))
