@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision.models.resnet as resnet
 import numpy as np
 import math
-from utils.geometry import rot6d_to_rotmat
+from SPIN.utils.geometry import rot6d_to_rotmat
 
 class Bottleneck(nn.Module):
     """ Redefinition of Bottleneck residual block

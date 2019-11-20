@@ -7,7 +7,7 @@ from tqdm import tqdm
 tqdm.monitor_interval = 0
 from torch.utils.tensorboard import SummaryWriter
 
-from utils import CheckpointDataLoader, CheckpointSaver
+from SPIN.utils import CheckpointDataLoader, CheckpointSaver
 
 class BaseTrainer(object):
     """Base class for Trainer objects.

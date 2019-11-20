@@ -7,7 +7,7 @@ import scipy.misc
 import cv2
 from PIL import Image
 
-import constants
+import SPIN.constants
 
 def get_transform(center, scale, res, rot=0):
     """Generate transformation matrix."""

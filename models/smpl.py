@@ -5,16 +5,16 @@ from smplx import SMPL as _SMPL
 from smplx.body_models import ModelOutput
 from smplx.lbs import vertices2joints
 
-import config
-import constants
+import SPIN.config
+import SPIN.constants
 
 class SMPL(_SMPL):
     """ Extension of the official SMPL implementation to support more joints """
 
     def __init__(self, *args, **kwargs):
         super(SMPL, self).__init__(*args, **kwargs)
-        joints = [constants.JOINT_MAP[i] for i in constants.JOINT_NAMES]
-        J_regressor_extra = np.load(config.JOINT_REGRESSOR_TRAIN_EXTRA)
+        joints = [SPIN.constants.JOINT_MAP[i] for i in SPIN.constants.JOINT_NAMES]
+        J_regressor_extra = np.load(SPIN.config.JOINT_REGRESSOR_TRAIN_EXTRA)
         self.register_buffer('J_regressor_extra', torch.tensor(J_regressor_extra, dtype=torch.float32))
         self.joint_map = torch.tensor(joints, dtype=torch.long)
 
