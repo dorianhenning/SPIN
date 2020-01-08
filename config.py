@@ -5,13 +5,13 @@ Things you need to change: *_ROOT that indicate the path to each dataset
 """
 from os.path import join
 
-H36M_ROOT = ''
+H36M_ROOT = '/vol/bitbucket/dfh17/datasets/human3.6m/'
 LSP_ROOT = ''
-LSP_ORIGINAL_ROOT = ''
-LSPET_ROOT = ''
+LSP_ORIGINAL_ROOT = '/vol/bitbucket/dfh17/datasets/lsp_dataset_original'
+LSPET_ROOT = '/vol/bitbucket/dfh17/datasets/hr-lspet/'
 MPII_ROOT = ''
-COCO_ROOT = ''
-MPI_INF_3DHP_ROOT = ''
+COCO_ROOT = '/vol/bitbucket/dfh17/datasets/coco_root/'
+MPI_INF_3DHP_ROOT = '/vol/bitbucket/dfh17/datasets/mpii_human_pose/'
 PW3D_ROOT = ''
 UPI_S1H_ROOT = ''
 
