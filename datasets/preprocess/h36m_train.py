@@ -10,7 +10,7 @@ from .read_openpose import read_openpose
 
 # Illustrative script for training data extraction
 # No SMPL parameters will be included in the .npz file.
-def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=False):
+def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=True, protocol=1):
 
     # convert joints to global order
     h36m_idx = [11, 6, 7, 8, 1, 2, 3, 12, 24, 14, 15, 17, 18, 19, 25, 26, 27]
@@ -20,7 +20,7 @@ def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=False)
     imgnames_, scales_, centers_, parts_, Ss_, openposes_  = [], [], [], [], [], []
 
     # users in validation set
-    user_list = [1, 5, 6, 7, 8]
+    user_list = [9, 11]
 
     # go over each user
     for user_i in user_list:
@@ -75,7 +75,7 @@ def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=False)
                 # check if you can keep this frame
                 if frame_i % 5 == 0 and (protocol == 1 or camera == '60457274'):
                     # image name
-                    imgname = '%s_%s.%s_%06d.jpg' % (user_name, action, camera, frame_i+1)
+                    imgname = '%s_%s.%s_%06d.jpg' % (user_name, action, camera, frame_i)
                     
                     # save image
                     if extract_img:
@@ -91,7 +91,7 @@ def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=False)
 
                     # read GT 3D pose
                     partall = np.reshape(poses_2d[frame_i,:], [-1,2])
-                    part17 = partalll[h36m_idx]
+                    part17 = partall[h36m_idx]
                     part = np.zeros([24,3])
                     part[global_idx, :2] = part17
                     part[global_idx, 2] = 1
@@ -105,7 +105,8 @@ def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=False)
                     S24[global_idx, 3] = 1
                     
                     # read openpose detections
-                    json_file = os.path.join(openpose_path, 'coco',
+
+                    json_file = os.path.join(openpose_path, 'h36m',
                         imgname.replace('.jpg', '_keypoints.json'))
                     openpose = read_openpose(json_file, part, 'h36m')
 
