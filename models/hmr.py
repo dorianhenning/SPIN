@@ -71,6 +71,9 @@ class HMR(nn.Module):
         self.decpose = nn.Linear(1024, npose)
         self.decshape = nn.Linear(1024, 10)
         self.deccam = nn.Linear(1024, 3)
+        self.decpose_var = nn.Linear(1024, npose)
+        self.decshape_var = nn.Linear(1024, 10)
+        self.deccam_var = nn.Linear(1024, 3)
         nn.init.xavier_uniform_(self.decpose.weight, gain=0.01)
         nn.init.xavier_uniform_(self.decshape.weight, gain=0.01)
         nn.init.xavier_uniform_(self.deccam.weight, gain=0.01)
@@ -146,10 +149,15 @@ class HMR(nn.Module):
             pred_pose = self.decpose(xc) + pred_pose
             pred_shape = self.decshape(xc) + pred_shape
             pred_cam = self.deccam(xc) + pred_cam
+
+        pred_pose_var = self.decpose_var(xc)
+        pred_shape_var = self.decshape_var(xc)
+        pred_cam_var = self.deccam_var(xc)
         
         pred_rotmat = rot6d_to_rotmat(pred_pose).view(batch_size, 24, 3, 3)
+        pred_rotmat_var = rot6d_to_rotmat(pred_pose_var).view(batch_size, 24, 3, 3)
 
-        return pred_rotmat, pred_shape, pred_cam
+        return pred_rotmat, pred_shape, pred_cam, pred_rotmat_var, pred_shape_var, pred_cam_var
 
 def hmr(smpl_mean_params, pretrained=True, **kwargs):
     """ Constructs an HMR model with ResNet50 backbone.

@@ -153,7 +153,7 @@ class Trainer(BaseTrainer):
                                                        gt_keypoints_2d_orig).mean(dim=-1)
 
         # Feed images in the network to predict camera and SMPL parameters
-        pred_rotmat, pred_betas, pred_camera = self.model(images)
+        pred_rotmat, pred_betas, pred_camera, pred_rotmat_var, pred_betas_var, pred_camera_var = self.model(images)
 
         pred_output = self.smpl(betas=pred_betas, body_pose=pred_rotmat[:,1:], global_orient=pred_rotmat[:,0].unsqueeze(1), pose2rot=False)
         pred_vertices = pred_output.vertices
