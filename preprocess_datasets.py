@@ -3,9 +3,13 @@
 Preprocess datasets and generate npz files to be used for training testing.
 It is recommended to first read datasets/preprocess/README.md
 """
+import os
+os.environ["CDF_LIB"] = '/vol/bitbucket/dfh17/software/cdf/lib/'
+
 import argparse
 import config as cfg
 from datasets.preprocess import h36m_extract,\
+                                h36m_train_extract, \
                                 pw3d_extract, \
                                 mpi_inf_3dhp_extract, \
                                 lsp_dataset_extract,\
@@ -26,6 +30,9 @@ if __name__ == '__main__':
     openpose_path = cfg.OPENPOSE_PATH
 
     if args.train_files:
+        # Human3.6M preprocessing
+        h36m_train_extract(cfg.H36M_ROOT, openpose_path, out_path)
+
         # MPI-INF-3DHP dataset preprocessing (training set)
         mpi_inf_3dhp_extract(cfg.MPI_INF_3DHP_ROOT, openpose_path, out_path, 'train', extract_img=True, static_fits=cfg.STATIC_FITS_DIR)
 

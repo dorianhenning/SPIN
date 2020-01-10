@@ -1,4 +1,5 @@
 from .h36m import h36m_extract
+from .h36m_train import h36m_train_extract
 from .pw3d import pw3d_extract
 from .mpi_inf_3dhp import mpi_inf_3dhp_extract
 from .lsp_dataset import lsp_dataset_extract
