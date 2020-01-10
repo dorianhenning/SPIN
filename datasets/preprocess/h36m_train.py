@@ -75,7 +75,7 @@ def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=True, 
                 # check if you can keep this frame
                 if frame_i % 5 == 0 and (protocol == 1 or camera == '60457274'):
                     # image name
-                    imgname = '%s_%s.%s_%06d.jpg' % (user_name, action, camera, frame_i)
+                    imgname = '%s_%s.%s_000000%06d.jpg' % (user_name, action, camera, frame_i)
                     
                     # save image
                     if extract_img:
@@ -106,8 +106,8 @@ def h36m_train_extract(dataset_path, openpose_path, out_path, extract_img=True, 
                     
                     # read openpose detections
 
-                    json_file = os.path.join(openpose_path, 'h36m',
-                        imgname.replace('.jpg', '_keypoints.json'))
+                    json_file = os.path.join(openpose_path, 'h36m', user_name,
+                        imgname.replace('.jpg', '_keypoints.json').replace('%s_' % user_name, ''))
                     openpose = read_openpose(json_file, part, 'h36m')
 
                     # store data
