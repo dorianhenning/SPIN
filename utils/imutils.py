@@ -4,6 +4,7 @@ This file contains functions that are used to perform data augmentation.
 import torch
 import numpy as np
 import scipy.misc
+from skimage.transform import rotate
 import cv2
 from PIL import Image
 
@@ -74,10 +75,14 @@ def crop(img, center, scale, res, rot=0):
 
     if not rot == 0:
         # Remove padding
-        new_img = scipy.misc.imrotate(new_img, rot)
+        new_img = rotate(new_img, rot)
         new_img = new_img[pad:-pad, pad:-pad]
+    
+    if new_img.dtype == np.uint8:
+        new_img = np.array(Image.fromarray(new_img).resize(res))
+    else:
+        new_img = np.array(Image.fromarray((new_img * 255).astype(np.uint8)).resize(res))
 
-    new_img = np.array(Image.fromarray(new_img).resize(res))
     return new_img
 
 def uncrop(img, center, scale, orig_shape, rot=0, is_rgb=True):
@@ -129,9 +134,9 @@ def flip_img(img):
 def flip_kp(kp):
     """Flip keypoints."""
     if len(kp) == 24:
-        flipped_parts = constants.J24_FLIP_PERM
+        flipped_parts = SPIN.constants.J24_FLIP_PERM
     elif len(kp) == 49:
-        flipped_parts = constants.J49_FLIP_PERM
+        flipped_parts = SPIN.constants.J49_FLIP_PERM
     kp = kp[flipped_parts]
     kp[:,0] = - kp[:,0]
     return kp
@@ -140,7 +145,7 @@ def flip_pose(pose):
     """Flip pose.
     The flipping is based on SMPL parameters.
     """
-    flipped_parts = constants.SMPL_POSE_FLIP_PERM
+    flipped_parts = SPIN.constants.SMPL_POSE_FLIP_PERM
     pose = pose[flipped_parts]
     # we also negate the second and the third dimension of the axis-angle
     pose[1::3] = -pose[1::3]
