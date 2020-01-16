@@ -155,3 +155,44 @@ def estimate_translation(S, joints_2d, focal_length=5000., img_size=224.):
         conf_i = joints_conf[i]
         trans[i] = estimate_translation_np(S_i, joints_i, conf_i, focal_length=focal_length, img_size=img_size)
     return torch.from_numpy(trans).to(device)
+
+
+def compute_jacobian(outputs, inputs):
+    """ Computes the numerical Jacobian (via torch.autograd) from inputs (pose, shape, camera)
+    to outputs (2D/3D keypoints)
+
+    """
+    # dimensionality (2D/3D)
+    dim = outputs.shape[2]
+    input_size = inputs.shape[1]
+    bs = outputs.shape[0]
+    output_size = outputs.shape[1]
+
+    J = torch.zeros((bs, output_size, input_size, dim)).cuda()
+    for i in range(output_size):
+        for d in range(dim):
+            out = torch.zeros(bs, dim).cuda()
+            out[:, d] = 1.
+            J[:,i,:,d] = torch.autograd.grad(outputs[:, i, :], inputs, grad_outputs=out, retain_graph=True)[0]
+
+    return J
+
+# Working for ROTMAT & Betas
+#def compute_jacobian(outputs, inputs):
+#    
+#    input_size = inputs.shape[1]
+#
+#    bs = outputs.shape[0]
+#    output_size = outputs.shape[1]
+#
+#    J = torch.zeros((bs, output_size, input_size)).cuda()
+#
+#    for i in range(output_size):
+#        out = torch.zeros(bs, output_size).cuda()
+#        out[:, i] = 1.
+#        J[:, i, :] = torch.autograd.grad(outputs, inputs, grad_outputs=out, retain_graph=True)[0]
+#
+#        #J[:, i, :] = torch.autograd.grad(outputs, inputs, grad_outputs=out, retain_graph=True)[0]
+#        # last [0] indexes the tuple if inputs
+#    
+#    return J

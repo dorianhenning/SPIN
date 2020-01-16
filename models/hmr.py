@@ -64,6 +64,8 @@ class HMR(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
+ 
+        # mean prediction of Gaussian distribution
         self.fc1 = nn.Linear(512 * block.expansion + npose + 13, 1024)
         self.drop1 = nn.Dropout()
         self.fc2 = nn.Linear(1024, 1024)
@@ -71,13 +73,25 @@ class HMR(nn.Module):
         self.decpose = nn.Linear(1024, npose)
         self.decshape = nn.Linear(1024, 10)
         self.deccam = nn.Linear(1024, 3)
-        self.decpose_var = nn.Linear(1024, npose)
-        self.decshape_var = nn.Linear(1024, 10)
-        self.deccam_var = nn.Linear(1024, 3)
+ 
         nn.init.xavier_uniform_(self.decpose.weight, gain=0.01)
         nn.init.xavier_uniform_(self.decshape.weight, gain=0.01)
         nn.init.xavier_uniform_(self.deccam.weight, gain=0.01)
 
+        # variance prediction of Gaussian distribution
+        # (variance in log variance s = log(sigma^2) )
+        self.fc1_var = nn.Linear(512 * block.expansion + npose + 13, 1024)
+        self.drop1_var = nn.Dropout()
+        self.fc2_var = nn.Linear(1024, 1024)
+        self.drop2_var = nn.Dropout()
+        self.decpose_var = nn.Linear(1024, npose)
+        self.decshape_var = nn.Linear(1024, 10)
+        self.deccam_var = nn.Linear(1024, 3)
+
+        nn.init.xavier_uniform_(self.decpose_var.weight, gain=0.01)
+        nn.init.xavier_uniform_(self.decshape_var.weight, gain=0.01)
+        nn.init.xavier_uniform_(self.deccam_var.weight, gain=0.01)
+        
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -90,9 +104,18 @@ class HMR(nn.Module):
         init_pose = torch.from_numpy(mean_params['pose'][:]).unsqueeze(0)
         init_shape = torch.from_numpy(mean_params['shape'][:].astype('float32')).unsqueeze(0)
         init_cam = torch.from_numpy(mean_params['cam']).unsqueeze(0)
+
+        init_pose_var = torch.zeros(init_pose.shape)
+        init_shape_var = torch.zeros(init_shape.shape)
+        init_cam_var = torch.zeros(init_cam.shape)
+
         self.register_buffer('init_pose', init_pose)
         self.register_buffer('init_shape', init_shape)
         self.register_buffer('init_cam', init_cam)
+
+        self.register_buffer('init_pose_var', init_pose_var)
+        self.register_buffer('init_shape_var', init_shape_var)
+        self.register_buffer('init_cam_var', init_cam_var)
 
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -119,10 +142,13 @@ class HMR(nn.Module):
 
         if init_pose is None:
             init_pose = self.init_pose.expand(batch_size, -1)
+            init_pose_var = self.init_pose_var.expand(batch_size, -1)
         if init_shape is None:
             init_shape = self.init_shape.expand(batch_size, -1)
+            init_shape_var = self.init_shape_var.expand(batch_size, -1)
         if init_cam is None:
             init_cam = self.init_cam.expand(batch_size, -1)
+            init_cam_var = self.init_cam_var.expand(batch_size, -1)
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -136,10 +162,16 @@ class HMR(nn.Module):
 
         xf = self.avgpool(x4)
         xf = xf.view(xf.size(0), -1)
+        xf_var = xf
 
         pred_pose = init_pose
         pred_shape = init_shape
         pred_cam = init_cam
+ 
+        pred_pose_var = init_pose_var
+        pred_shape_var = init_shape_var
+        pred_cam_var = init_cam_var
+ 
         for i in range(n_iter):
             xc = torch.cat([xf, pred_pose, pred_shape, pred_cam],1)
             xc = self.fc1(xc)
@@ -150,14 +182,20 @@ class HMR(nn.Module):
             pred_shape = self.decshape(xc) + pred_shape
             pred_cam = self.deccam(xc) + pred_cam
 
+            xc_var = torch.cat([xf_var, pred_pose_var, pred_shape_var, pred_cam_var],1)
+            xc_var = self.fc1(xc_var)
+            xc_var = self.drop1(xc_var)
+            xc_var = self.fc2(xc_var)
+            xc_var = self.drop2(xc_var)
+            pred_pose_var = self.decpose_var(xc_var) + pred_pose_var
+            pred_shape_var = self.decshape_var(xc_var) + pred_shape_var
+            pred_cam_var = self.deccam_var(xc_var) + pred_cam_var
+
         pred_pose_var = self.decpose_var(xc)
         pred_shape_var = self.decshape_var(xc)
         pred_cam_var = self.deccam_var(xc)
-        
-        pred_rotmat = rot6d_to_rotmat(pred_pose).view(batch_size, 24, 3, 3)
-        pred_rotmat_var = rot6d_to_rotmat(pred_pose_var).view(batch_size, 24, 3, 3)
-
-        return pred_rotmat, pred_shape, pred_cam, pred_rotmat_var, pred_shape_var, pred_cam_var
+ 
+        return pred_pose, pred_shape, pred_cam, pred_pose_var, pred_shape_var, pred_cam_var
 
 def hmr(smpl_mean_params, pretrained=True, **kwargs):
     """ Constructs an HMR model with ResNet50 backbone.
