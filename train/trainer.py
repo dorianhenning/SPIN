@@ -167,7 +167,6 @@ class Trainer(BaseTrainer):
                                                        gt_keypoints_2d_orig).mean(dim=-1)
 
         # Feed images in the network to predict camera and SMPL parameters
-        #pred_rotmat, pred_betas, pred_camera, pred_rotmat_var, pred_betas_var, pred_camera_var = self.model(images)
         pred_pose, pred_betas, pred_camera, pred_pose_var, pred_betas_var, pred_camera_var = self.model(images)
         pred_rotmat = rot6d_to_rotmat(pred_pose).view(batch_size, 24, 3, 3)
 
@@ -175,8 +174,6 @@ class Trainer(BaseTrainer):
         pred_output = self.smpl(betas=pred_betas, body_pose=pred_rotmat[:,1:], global_orient=pred_rotmat[:,0].unsqueeze(1), pose2rot=False)
         pred_vertices = pred_output.vertices
         pred_joints = pred_output.joints
-
-        #J = compute_jacobian(pred_output.joints.view(64,-1), (pred_pose, pred_betas, pred_camera))
 
         # Convert Weak Perspective Camera [s, tx, ty] to camera translation [tx, ty, tz] in 3D given the bounding box size
         # This camera translation can be used in a full perspective projection
@@ -274,7 +271,7 @@ class Trainer(BaseTrainer):
 
         # 2D Keypoint Loss
         loss_keypoints = self.keypoint_loss(pred_keypoints_2d,
-                                            cov_kp2d,,
+                                            cov_kp2d,
                                             gt_keypoints_2d,
                                             self.options.openpose_train_weight,
                                             self.options.gt_train_weight)
@@ -284,21 +281,16 @@ class Trainer(BaseTrainer):
         cov_kp3d = compute_covariances(pred_joints, 
                                        [pred_pose, pred_betas],
                                        [pred_pose_var, pred_betas_var])
-        
+
         # 3D Keypoint Loss
         loss_keypoints_3d = self.keypoint_3d_loss(pred_joints,
-                                                  cov_kp3d,#pred_joints_var,
+                                                  cov_kp3d,
                                                   gt_joints,
                                                   has_pose_3d)
 
-        # Per-vertex loss for the shape
-        # w = 0 (default) -> ignored
-        loss_shape = self.shape_loss(pred_vertices, opt_vertices, valid_fit)
-
         # Compute total loss
         # The last component is a loss that forces the network to predict positive depth values
-        loss = self.options.shape_loss_weight * loss_shape +\
-               self.options.keypoint_loss_weight * loss_keypoints +\
+        loss = self.options.keypoint_loss_weight * loss_keypoints +\
                self.options.keypoint_loss_weight * loss_keypoints_3d +\
                self.options.pose_loss_weight * loss_regr_pose +\
                self.options.beta_loss_weight * loss_regr_betas +\
@@ -320,8 +312,7 @@ class Trainer(BaseTrainer):
                   'loss_keypoints': loss_keypoints.detach().item(),
                   'loss_keypoints_3d': loss_keypoints_3d.detach().item(),
                   'loss_regr_pose': loss_regr_pose.detach().item(),
-                  'loss_regr_betas': loss_regr_betas.detach().item(),
-                  'loss_shape': loss_shape.detach().item()}
+                  'loss_regr_betas': loss_regr_betas.detach().item()}
 
         return output, losses
 
