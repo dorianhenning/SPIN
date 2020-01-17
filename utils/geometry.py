@@ -177,6 +177,26 @@ def compute_jacobian(outputs, inputs):
 
     return J
 
+
+def compute_covariances(outputs, inputs, inputs_var):
+    """ for 3 different inputs (pose, shape, camera):
+    computes all Jacobians
+    """
+    n_outputs = outputs.shape[1]
+    J_tmp = []
+    in_var_cat = torch.cat((inputs_var), dim=1)
+
+    for i in inputs:
+        J_tmp.append(compute_jacobian(outputs, i))
+
+    J_cat = torch.cat(J_tmp, dim=2)
+    Jt_cat = torch.transpose(J_cat, dim0=2, dim1=3)
+
+    sig_inputs =  torch.diag_embed(in_var_cat).unsqueeze(1).repeat(1, n_outputs, 1, 1)
+
+    return torch.matmul(Jt_cat, torch.matmul(sig_inputs, J_cat))
+
+
 # Working for ROTMAT & Betas
 #def compute_jacobian(outputs, inputs):
 #    

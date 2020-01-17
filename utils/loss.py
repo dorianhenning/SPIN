@@ -20,7 +20,7 @@ class MSE_Var_Loss(nn.Module):
             
             delta[:,i,:] = gt[:,i,:] - mean[:,i,:]
             
-            expm = torch_expm(var[:,i,:,:])
+            expm = torch_expm(torch.inverse(var[:,i,:,:]))
 
             loss_1 = torch.bmm(expm, delta[:,i,:].clone().unsqueeze(2))
             loss_1 = torch.bmm(delta[:,i,:].clone().unsqueeze(1), loss_1).squeeze()
