@@ -255,12 +255,7 @@ class Trainer(BaseTrainer):
 
         opt_keypoints_2d = opt_keypoints_2d / (self.options.img_res / 2.)
 
-        # compute Jacobians
-        #J = compute_jacobian(pred_keypoints_2d.contiguous().view(64,-1), (pred_pose, pred_betas, pred_camera))
-#        import pdb; pdb.set_trace()
-       # J_rotmat = compute_jacobian(pred_rotmat.view(self.options.batch_size, -1), pred_pose)
-       # Jt_rotmat = torch.transpose(J_rotmat, dim0=1, dim1=2)
-       # pred_rotmat_var = torch.bmm(J_rotmat, torch.bmm(torch.diag_embed(pred_pose_var), Jt_rotmat))
+        # Compute Covariance Matrix
 
         # Compute loss on SMPL parameters
         loss_regr_pose, loss_regr_betas = self.smpl_losses(pred_rotmat, 
@@ -270,34 +265,27 @@ class Trainer(BaseTrainer):
                                                            opt_pose, 
                                                            opt_betas, 
                                                            valid_fit)
-        #import pdb; pdb.set_trace()
 
         # Compute 2D reprojection loss for the keypoints
+        # Compute Covariance Matrix
         cov_kp2d = compute_covariances(pred_keypoints_2d, 
                                        [pred_pose, pred_betas, pred_camera],
                                        [pred_pose_var, pred_betas_var, pred_camera_var])
-        #J_kp2d = compute_jacobian(pred_keypoints_2d, pred_pose)
-        #Jt_kp2d = torch.transpose(J_kp2d, dim0=2, dim1=3)
-        #n_kp2d = J_kp2d.shape[1]
-        #sig_kp2d = torch.diag_embed(pred_pose_var).unsqueeze(1).repeat(1, n_kp2d, 1, 1)
-        #pred_keypoints_2d_var = torch.matmul(Jt_kp2d, torch.matmul(sig_kp2d, J_kp2d))
-        
+
+        # 2D Keypoint Loss
         loss_keypoints = self.keypoint_loss(pred_keypoints_2d,
-                                            cov_kp2d,#pred_keypoints_2d_var,
+                                            cov_kp2d,,
                                             gt_keypoints_2d,
                                             self.options.openpose_train_weight,
                                             self.options.gt_train_weight)
 
         # Compute 3D keypoint loss
+        # Compute Covariance Matrix
         cov_kp3d = compute_covariances(pred_joints, 
                                        [pred_pose, pred_betas],
                                        [pred_pose_var, pred_betas_var])
-        #J_kp3d = compute_jacobian(pred_joints, pred_pose)
-        #Jt_kp3d = torch.transpose(J_kp3d, dim0=2, dim1=3)
-        #n_kp3d = J_kp3d.shape[1]
-        #sig_kp3d = torch.diag_embed(pred_pose_var).unsqueeze(1).repeat(1, n_kp3d, 1, 1)
-        #pred_joints_var = torch.matmul(Jt_kp3d, torch.matmul(sig_kp3d, J_kp3d))
-
+        
+        # 3D Keypoint Loss
         loss_keypoints_3d = self.keypoint_3d_loss(pred_joints,
                                                   cov_kp3d,#pred_joints_var,
                                                   gt_joints,
