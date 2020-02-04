@@ -23,7 +23,8 @@ class Trainer(BaseTrainer):
         self.train_ds = MixedDataset(self.options, ignore_3d=self.options.ignore_3d, is_train=True)
 
         self.model = hmr(config.SMPL_MEAN_PARAMS, pretrained=True).to(self.device)
-        self.optimizer = torch.optim.Adam(params=self.model.parameters(),
+        self.optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, self.model.parameters()),
+                                          #params=self.model.parameters(),
                                           lr=self.options.lr,
                                           weight_decay=0)
         self.smpl = SMPL(config.SMPL_MODEL_DIR,
@@ -36,8 +37,8 @@ class Trainer(BaseTrainer):
         self.criterion_keypoints = MSE_Var_Loss().to(self.device)
         #self.criterion_keypoints = nn.MSELoss(reduction='none').to(self.device)
         # Loss for SMPL parameter regression
-        #self.criterion_regr = MSE_Var_Loss().to(self.device)
-        self.criterion_regr = nn.MSELoss().to(self.device)
+        self.criterion_regr = MSE_Var_Loss().to(self.device)
+        #self.criterion_regr = nn.MSELoss().to(self.device)
         self.models_dict = {'model': self.model}
         self.optimizers_dict = {'optimizer': self.optimizer}
         self.focal_length = constants.FOCAL_LENGTH
@@ -65,9 +66,10 @@ class Trainer(BaseTrainer):
         conf = gt_keypoints_2d[:, :, -1].unsqueeze(-1).clone()
         conf[:, :25] *= openpose_weight
         conf[:, 25:] *= gt_weight
-        loss = (conf * self.criterion_keypoints(pred_keypoints_2d, pred_keypoints_2d_var, gt_keypoints_2d[:, :, :-1])).mean()
+        loss_ret, loss_var = self.criterion_keypoints(pred_keypoints_2d, pred_keypoints_2d_var, gt_keypoints_2d[:, :, :-1])
+        loss  = (conf * loss_ret).mean()
         #loss = (conf * self.criterion_keypoints(pred_keypoints_2d, gt_keypoints_2d[:, :, :-1])).mean()
-        return loss
+        return loss, loss_var
 
     def keypoint_3d_loss(self, pred_keypoints_3d, pred_keypoints_3d_var, gt_keypoints_3d, has_pose_3d):
     #def keypoint_3d_loss(self, pred_keypoints_3d, gt_keypoints_3d, has_pose_3d):
@@ -87,10 +89,13 @@ class Trainer(BaseTrainer):
             gt_keypoints_3d = gt_keypoints_3d - gt_pelvis[:, None, :]
             pred_pelvis = (pred_keypoints_3d[:, 2,:] + pred_keypoints_3d[:, 3,:]) / 2
             pred_keypoints_3d = pred_keypoints_3d - pred_pelvis[:, None, :]
-            return (conf * self.criterion_keypoints(pred_keypoints_3d, pred_keypoints_3d_var, gt_keypoints_3d)).mean()
+            loss_ret, loss_var = self.criterion_keypoints(pred_keypoints_3d, pred_keypoints_3d_var, gt_keypoints_3d)
+            loss = (conf * loss_ret).mean()
+            return loss, loss_var
             #return (conf * self.criterion_keypoints(pred_keypoints_3d, gt_keypoints_3d)).mean()
         else:
-            return torch.FloatTensor(1).fill_(0.).to(self.device)
+            return torch.FloatTensor(1).fill_(0.).to(self.device), torch.FloatTensor(1).fill_(0.).to(self.device)
+
 
     def shape_loss(self, pred_vertices, gt_vertices, has_smpl):
         """Compute per-vertex loss on the shape for the examples that SMPL annotations are available."""
@@ -101,23 +106,25 @@ class Trainer(BaseTrainer):
         else:
             return torch.FloatTensor(1).fill_(0.).to(self.device)
 
-    #def smpl_losses(self, pred_rotmat, pred_betas, pred_rotmat_var, pred_betas_var, gt_pose, gt_betas, has_smpl):
-    def smpl_losses(self, pred_rotmat, pred_betas, gt_pose, gt_betas, has_smpl):
+    def smpl_losses(self, pred_rotmat, pred_betas, pred_rotmat_var, pred_betas_var, gt_pose, gt_betas, has_smpl):
+    #def smpl_losses(self, pred_rotmat, pred_betas, gt_pose, gt_betas, has_smpl):
         pred_rotmat_valid = pred_rotmat[has_smpl == 1]
-        #pred_rotmat_var_valid = pred_rotmat_var[has_smpl == 1]
-        gt_rotmat_valid = batch_rodrigues(gt_pose.view(-1,3)).view(-1, 24, 3, 3)[has_smpl == 1]
+        pred_rotmat_var_valid = pred_rotmat_var[has_smpl == 1]
+        gt_rotmat_valid = batch_rodrigues(gt_pose.view(-1,3)).view(-1, 24, 9)[has_smpl == 1]
         pred_betas_valid = pred_betas[has_smpl == 1]
-        #pred_betas_var_valid = pred_betas_var[has_smpl == 1]
+        pred_betas_var_valid = pred_betas_var[has_smpl == 1]
         gt_betas_valid = gt_betas[has_smpl == 1]
         if len(pred_rotmat_valid) > 0:
-            #loss_regr_pose = self.criterion_regr(pred_rotmat_valid, pred_rotmat_var_valid, gt_rotmat_valid)
-            #loss_regr_betas = self.criterion_regr(pred_betas_valid, pred_betas_var_valid, gt_betas_valid)
-            loss_regr_pose = self.criterion_regr(pred_rotmat_valid, gt_rotmat_valid)
-            loss_regr_betas = self.criterion_regr(pred_betas_valid, gt_betas_valid)
+            loss_regr_pose, loss_regr_pose_var = self.criterion_regr(pred_rotmat_valid, pred_rotmat_var_valid, gt_rotmat_valid)
+            loss_regr_betas, loss_regr_betas_var = self.criterion_regr(pred_betas_valid.unsqueeze(1), pred_betas_var_valid.unsqueeze(1), gt_betas_valid.unsqueeze(1))
+            #loss_regr_pose = self.criterion_regr(pred_rotmat_valid, gt_rotmat_valid)
+            #loss_regr_betas = self.criterion_regr(pred_betas_valid, gt_betas_valid)
         else:
             loss_regr_pose = torch.FloatTensor(1).fill_(0.).to(self.device)
+            loss_regr_pose_var = torch.FloatTensor(1).fill_(0.).to(self.device)
             loss_regr_betas = torch.FloatTensor(1).fill_(0.).to(self.device)
-        return loss_regr_pose, loss_regr_betas
+            loss_regr_betas_var = torch.FloatTensor(1).fill_(0.).to(self.device)
+        return loss_regr_pose, loss_regr_betas, loss_regr_pose_var, loss_regr_betas_var
 
     def train_step(self, input_batch):
         self.model.train()
@@ -168,6 +175,10 @@ class Trainer(BaseTrainer):
 
         # Feed images in the network to predict camera and SMPL parameters
         pred_pose, pred_betas, pred_camera, pred_pose_var, pred_betas_var, pred_camera_var = self.model(images)
+
+        # set gradient on for Jacobians
+        for p in [pred_pose, pred_betas, pred_camera]:
+            p.requires_grad = True
         pred_rotmat = rot6d_to_rotmat(pred_pose).view(batch_size, 24, 3, 3)
 
 
@@ -253,15 +264,17 @@ class Trainer(BaseTrainer):
         opt_keypoints_2d = opt_keypoints_2d / (self.options.img_res / 2.)
 
         # Compute Covariance Matrix
+        #import pdb; pdb.set_trace()
+        #cov_rotmat = compute_covariances(pred_rotmat.view(batch_size, 24, 9), [pred_pose], [pred_pose_var])
 
         # Compute loss on SMPL parameters
-        loss_regr_pose, loss_regr_betas = self.smpl_losses(pred_rotmat, 
-                                                           pred_betas, 
-                                                           #pred_rotmat_var, 
-                                                           #torch.diag_embed(pred_betas_var), 
-                                                           opt_pose, 
-                                                           opt_betas, 
-                                                           valid_fit)
+        #loss_regr_pose, loss_regr_betas, loss_regr_pose_var, loss_regr_betas_var = self.smpl_losses(pred_rotmat.view(batch_size, 24, 9),
+        #                                                   pred_betas,
+        #                                                   cov_rotmat,
+        #                                                   torch.diag_embed(pred_betas_var),
+        #                                                   opt_pose,
+        #                                                   opt_betas,
+        #                                                   valid_fit)
 
         # Compute 2D reprojection loss for the keypoints
         # Compute Covariance Matrix
@@ -270,7 +283,7 @@ class Trainer(BaseTrainer):
                                        [pred_pose_var, pred_betas_var, pred_camera_var])
 
         # 2D Keypoint Loss
-        loss_keypoints = self.keypoint_loss(pred_keypoints_2d,
+        loss_keypoints, loss_keypoints_var = self.keypoint_loss(pred_keypoints_2d,
                                             cov_kp2d,
                                             gt_keypoints_2d,
                                             self.options.openpose_train_weight,
@@ -283,7 +296,7 @@ class Trainer(BaseTrainer):
                                        [pred_pose_var, pred_betas_var])
 
         # 3D Keypoint Loss
-        loss_keypoints_3d = self.keypoint_3d_loss(pred_joints,
+        loss_keypoints_3d, loss_keypoints_3d_var = self.keypoint_3d_loss(pred_joints,
                                                   cov_kp3d,
                                                   gt_joints,
                                                   has_pose_3d)
@@ -291,11 +304,14 @@ class Trainer(BaseTrainer):
         # Compute total loss
         # The last component is a loss that forces the network to predict positive depth values
         loss = self.options.keypoint_loss_weight * loss_keypoints +\
-               self.options.keypoint_loss_weight * loss_keypoints_3d +\
-               self.options.pose_loss_weight * loss_regr_pose +\
-               self.options.beta_loss_weight * loss_regr_betas +\
-               ((torch.exp(-pred_camera[:,0]*10)) ** 2 ).mean()
+               self.options.keypoint_loss_weight * loss_keypoints_3d +((torch.exp(-pred_camera[:,0]*10)) ** 2 ).mean()
+
+        #       self.options.pose_loss_weight * loss_regr_pose +\
+        #       self.options.beta_loss_weight * loss_regr_betas +\
+        #       ((torch.exp(-pred_camera[:,0]*10)) ** 2 ).mean()
         loss *= 60
+        #if torch.isnan(loss):
+        #import pdb; pdb.set_trace()
 
 
         # Do backprop
@@ -311,8 +327,13 @@ class Trainer(BaseTrainer):
         losses = {'loss': loss.detach().item(),
                   'loss_keypoints': loss_keypoints.detach().item(),
                   'loss_keypoints_3d': loss_keypoints_3d.detach().item(),
-                  'loss_regr_pose': loss_regr_pose.detach().item(),
-                  'loss_regr_betas': loss_regr_betas.detach().item()}
+                 # 'loss_regr_pose': loss_regr_pose.detach().item(),
+                 # 'loss_regr_betas': loss_regr_betas.detach().item(),
+                  'loss_keypoints_var': loss_keypoints_var.detach().item(),
+                  'loss_keypoints_3d_var': loss_keypoints_3d_var.detach().item()#,
+                 # 'loss_regr_pose_var': loss_regr_pose_var.detach().item(),
+                 # 'loss_regr_betas_var': loss_regr_betas_var.detach().item()
+                  }
 
         return output, losses
 
@@ -332,5 +353,7 @@ class Trainer(BaseTrainer):
             self.summary_writer.add_image('opt_shape', images_opt, self.step_count)
         except:
             j = 1
+            print(j)
+            #import pdb; pdb.set_trace()
         for loss_name, val in losses.items():
             self.summary_writer.add_scalar(loss_name, val, self.step_count)

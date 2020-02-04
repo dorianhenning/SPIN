@@ -13,24 +13,36 @@ class MSE_Var_Loss(nn.Module):
         #pdb.set_trace()
         n = var.shape[1]
         bs = var.shape[0]
+        #eye = torch.eye(var.shape[2]).cuda()
+        #eye = eye.reshape(1, 1, eye.shape[0], eye.shape[0])
+        #var = eye.repeat(bs, n, 1, 1)
+
         delta = torch.zeros(gt.shape).cuda()
         loss = torch.zeros(bs).cuda()
+        loss_var = torch.zeros(bs).cuda()
         for i in range(n):
             # iterating over keypoints
             
             delta[:,i,:] = gt[:,i,:] - mean[:,i,:]
             
-            expm = torch_expm(torch.inverse(var[:,i,:,:]))
+            #expm = torch.inverse(torch_expm(var[:,i,:,:]))
+            #if torch.isnan(expm):
+            #pdb.set_trace()
 
-            loss_1 = torch.bmm(expm, delta[:,i,:].clone().unsqueeze(2))
-            loss_1 = torch.bmm(delta[:,i,:].clone().unsqueeze(1), loss_1).squeeze()
-            #loss_1 = torch.mul(torch.transpose(delta, dim0=1, dim1=2), torch.bmm(expm, delta))
-            #print(var.shape[0])
-            loss_2 = torch.det(var[:,i,:,:])
+            
+            #loss_1 = (delta[:,i,:].unsqueeze(-1) * var[:,i,:,:].inverse().bmm(delta[:,i,:].unsqueeze(-1))).sum(1).squeeze()
+            expm = torch_expm(var[:,i,:,:]).inverse()
+            if torch.isnan(expm).any():
+                pdb.set_trace()
+            ## LOSS according to "Multivariate uncertainty in Deep Learning"
+#            expm = torch.inverse(var[:,i,:,:])
+            loss_1 = (delta[:,i,:].clone().unsqueeze(-1) * expm.bmm(delta[:,i,:].clone().unsqueeze(-1))).sum(1).squeeze()
+            loss_2 = torch.log(var[:,i,:,:].det().clamp(min=1e-10))
+            loss_var += loss_2 / n
 
             loss += .5 * (loss_1 + loss_2) / n
 
-        return loss.mean()
+        return loss.mean(), loss_var.mean()
 
 ## BACKUP: works for betas
 #class MSE_Var_Loss(nn.Module):
