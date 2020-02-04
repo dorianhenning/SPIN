@@ -39,7 +39,7 @@ class Renderer:
             alphaMode='OPAQUE',
             baseColorFactor=(0.8, 0.3, 0.3, 1.0))
 
-        camera_pose[0, 3] *= -1.  # why?
+        camera_pose[0, 3] *= -1.  # why? -> rendering & vision discrepancy
 
         mesh = trimesh.Trimesh(vertices, self.faces)
         rot = trimesh.transformations.rotation_matrix(
