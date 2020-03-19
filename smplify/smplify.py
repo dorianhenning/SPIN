@@ -77,7 +77,8 @@ class SMPLify():
 
         camera_opt_params = [global_orient, camera_translation]
         camera_optimizer = torch.optim.Adam(camera_opt_params, lr=self.step_size, betas=(0.9, 0.999))
-
+        import pdb
+        pdb.set_trace()
         for i in range(self.num_iters):
             smpl_output = self.smpl(global_orient=global_orient,
                                     body_pose=body_pose,

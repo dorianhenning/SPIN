@@ -10,12 +10,8 @@ class MSE_Var_Loss(nn.Module):
 
     def forward(self, mean, var, gt):
         # var = JT * diag(var) * J
-        #pdb.set_trace()
         n = var.shape[1]
         bs = var.shape[0]
-        #eye = torch.eye(var.shape[2]).cuda()
-        #eye = eye.reshape(1, 1, eye.shape[0], eye.shape[0])
-        #var = eye.repeat(bs, n, 1, 1)
 
         delta = torch.zeros(gt.shape).cuda()
         loss = torch.zeros(bs).cuda()
@@ -25,17 +21,13 @@ class MSE_Var_Loss(nn.Module):
             
             delta[:,i,:] = gt[:,i,:] - mean[:,i,:]
             
-            #expm = torch.inverse(torch_expm(var[:,i,:,:]))
-            #if torch.isnan(expm):
-            #pdb.set_trace()
-
-            
-            #loss_1 = (delta[:,i,:].unsqueeze(-1) * var[:,i,:,:].inverse().bmm(delta[:,i,:].unsqueeze(-1))).sum(1).squeeze()
-            expm = torch_expm(var[:,i,:,:]).inverse()
+            ## used in new (only last layer)
+            expm = torch.inverse(var[:,i,:,:])
+            ## used before:
+            #expm = torch_expm(var[:,i,:,:]).inverse()
             if torch.isnan(expm).any():
                 pdb.set_trace()
             ## LOSS according to "Multivariate uncertainty in Deep Learning"
-#            expm = torch.inverse(var[:,i,:,:])
             loss_1 = (delta[:,i,:].clone().unsqueeze(-1) * expm.bmm(delta[:,i,:].clone().unsqueeze(-1))).sum(1).squeeze()
             loss_2 = torch.log(var[:,i,:,:].det().clamp(min=1e-10))
             loss_var += loss_2 / n
